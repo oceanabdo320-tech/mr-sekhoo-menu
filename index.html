@@ -464,20 +464,7 @@ async function go(bleed) {
   print();
 }
 
-const pb = document.createElement('button');
-pb.className = "btn-action";
-pb.textContent = "طباعة مباشرة / PDF (A5)";
-pb.onclick = () => go(false);
-ui.appendChild(pb);
-
-const pb2 = document.createElement('button');
-pb2.className = "btn-action";
-pb2.textContent = "PDF للمطبعة (هوامش قص ٣ مم)";
-pb2.onclick = () => go(true);
-ui.appendChild(pb2);
-
-addEventListener('resize', fit);
-show(0);
+ 
 
 /* نظام طلبات مستر سيخو - إضافة مستقلة */
 (() => {
