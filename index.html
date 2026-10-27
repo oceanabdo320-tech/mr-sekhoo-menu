@@ -478,6 +478,176 @@ ui.appendChild(pb2);
 
 addEventListener('resize', fit);
 show(0);
+
+/* نظام طلبات مستر سيخو - إضافة مستقلة */
+(() => {
+  const groups = [
+    ["وجبات الفراخ", chicken, ["وجبة"]],
+    ["وجبات اللحوم", meals, ["وجبة"]],
+    ["المشويات", grill, ["كيلو", "نصف كيلو", "ربع كيلو"]],
+    ["السندوتشات", sand, ["بلدي", "فرنساوي"]],
+    ["البرجر", burger, ["بلدي", "فرنساوي"]],
+    ["الحواوشي", haw, ["بلدي", "فرنساوي"]],
+    ["البطاطس", pot, ["بلدي", "فرنساوي"]],
+    ["الأطباق الجانبية", kit, ["طبق"]]
+  ];
+
+  const cart = [];
+  const style = document.createElement("style");
+  style.textContent = `
+    #orderBox{direction:rtl;max-width:600px;margin:18px auto 90px;
+      padding:16px;border-radius:16px;background:#fff;color:#222;
+      font-family:Cairo,sans-serif;box-shadow:0 3px 15px #0002}
+    #orderBox h2{text-align:center;color:#b3121a}
+    #orderBox select,#orderBox input,#orderBox textarea{
+      width:100%;box-sizing:border-box;padding:11px;margin:5px 0 10px;
+      border:1px solid #ccc;border-radius:8px;font:inherit}
+    #orderBox button{border:0;border-radius:9px;padding:11px;
+      font:700 15px Cairo,sans-serif;cursor:pointer}
+    #addItem{background:#b3121a;color:#fff;width:100%}
+    #sendOrder{background:#16803c;color:#fff;width:100%;margin-top:12px}
+    #cartItems{padding:0;list-style:none}
+    #cartItems li{padding:9px 0;border-bottom:1px solid #ddd}
+    #cartItems button{padding:3px 9px;margin-inline-start:5px}
+  `;
+  document.head.appendChild(style);
+
+  const box = document.createElement("section");
+  box.id = "orderBox";
+  box.innerHTML = `
+    <h2>🛒 اطلب أونلاين من مستر سيخو</h2>
+    <label>القسم</label><select id="orderGroup"></select>
+    <label>الصنف</label><select id="orderProduct"></select>
+    <label>الحجم أو النوع</label><select id="orderSize"></select>
+    <button id="addItem">إضافة للسلة</button>
+    <h3>سلة الطلبات</h3><ul id="cartItems"></ul>
+    <h3 id="cartTotal">الإجمالي: ٠ جنيه</h3>
+    <label>الاسم</label><input id="customerName" placeholder="اسمك" />
+    <label>رقم الموبايل</label><input id="customerPhone" inputmode="tel" placeholder="01xxxxxxxxx" />
+    <label>طريقة الاستلام</label>
+    <select id="receive"><option value="توصيل">توصيل</option><option value="استلام من المطعم">استلام من المطعم</option></select>
+    <label>العنوان (للتوصيل)</label><textarea id="customerAddress" placeholder="العنوان بالتفصيل"></textarea>
+    <label>طريقة الدفع</label>
+    <select id="payment">
+      <option>كاش عند الاستلام</option>
+      <option>محفظة إلكترونية</option>
+      <option>InstaPay</option>
+    </select>
+    <p>رقم التحويل للمحفظة أو إنستا باي: <b dir="ltr">01226405610</b></p>
+    <p>تنبيه: التحويل يحتاج إلى مراجعة وتأكيد من المطعم.</p>
+    <button id="sendOrder">إرسال الطلب إلى واتساب</button>
+  `;
+  document.body.appendChild(box);
+
+  const $ = id => document.getElementById(id);
+  const group = $("orderGroup");
+  const product = $("orderProduct");
+  const size = $("orderSize");
+
+  groups.forEach((g, i) => group.add(new Option(g[0], i)));
+
+  function loadProducts() {
+    product.replaceChildren();
+    groups[+group.value][1].forEach((item, i) =>
+      product.add(new Option(item[0], i))
+    );
+    loadSizes();
+  }
+
+  function loadSizes() {
+    size.replaceChildren();
+    const [name, ...prices] = groups[+group.value][1][+product.value];
+    const labels = groups[+group.value][2];
+    prices.forEach((price, i) => {
+      if (price > 0) {
+        const label = labels.length === 1 ? labels[0] : (labels[i] || "اختيار " + (i + 1));
+        size.add(new Option(`${label} - ${price} جنيه`, `${i}:${price}`));
+      }
+    });
+  }
+
+  function renderCart() {
+    const list = $("cartItems");
+    list.replaceChildren();
+    let total = 0;
+    cart.forEach((item, i) => {
+      total += item.price * item.qty;
+      const li = document.createElement("li");
+      li.append(document.createTextNode(
+        `${item.name} (${item.size}) × ${item.qty} = ${item.price * item.qty} جنيه `
+      ));
+      [-1, 1].forEach(delta => {
+        const btn = document.createElement("button");
+        btn.textContent = delta === 1 ? "+" : "−";
+        btn.onclick = () => {
+          item.qty += delta;
+          if (item.qty <= 0) cart.splice(i, 1);
+          renderCart();
+        };
+        li.appendChild(btn);
+      });
+      list.appendChild(li);
+    });
+    $("cartTotal").textContent = `الإجمالي: ${total} جنيه`;
+  }
+
+  group.onchange = loadProducts;
+  product.onchange = loadSizes;
+
+  $("addItem").onclick = () => {
+    const [name] = groups[+group.value][1][+product.value];
+    if (!size.value) return alert("اختار الحجم أو النوع أولًا");
+    const [index, price] = size.value.split(":").map(Number);
+    const labels = groups[+group.value][2];
+    const sizeLabel = labels.length === 1 ? labels[0] : labels[index];
+    const existing = cart.find(x =>
+      x.name === name && x.size === sizeLabel && x.price === price
+    );
+    if (existing) existing.qty++;
+    else cart.push({name, size: sizeLabel, price, qty: 1});
+    renderCart();
+  };
+
+  $("receive").onchange = () => {
+    $("customerAddress").required = $("receive").value === "توصيل";
+  };
+
+  $("sendOrder").onclick = () => {
+    if (!cart.length) return alert("أضف صنفًا للسلة أولًا");
+    const name = $("customerName").value.trim();
+    const phone = $("customerPhone").value.trim();
+    const receive = $("receive").value;
+    const address = $("customerAddress").value.trim();
+    if (!name || !phone) return alert("اكتب الاسم ورقم الموبايل");
+    if (receive === "توصيل" && !address) return alert("اكتب عنوان التوصيل");
+
+    const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+    const details = cart.map(item =>
+      `• ${item.name} - ${item.size} × ${item.qty} = ${item.price * item.qty} جنيه`
+    ).join("\n");
+    const message = [
+      "طلب جديد من منيو مستر سيخو",
+      `الاسم: ${name}`,
+      `الموبايل: ${phone}`,
+      `الاستلام: ${receive}`,
+      ...(receive === "توصيل" ? [`العنوان: ${address}`] : []),
+      `الدفع: ${$("payment").value}`,
+      "",
+      details,
+      "",
+      `الإجمالي قبل رسوم التوصيل: ${total} جنيه`,
+      "يرجى تأكيد توافر الأصناف وأي رسوم توصيل مع المطعم."
+    ].join("\n");
+
+    window.open(
+      "https://wa.me/201033332315?text=" + encodeURIComponent(message),
+      "_blank"
+    );
+  };
+
+  loadProducts();
+})();
+
 </script> 
 <a href="https://wa.me/201033332315?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%B9%D8%A7%D9%8A%D8%B2%20%D8%A3%D8%B7%D9%84%D8%A8%20%D8%A3%D9%88%D8%B1%D8%AF%D8%B1%20%D9%85%D9%86%20%D9%85%D9%86%D9%8A%D9%88%20%D9%85%D8%B3%D8%AA%D8%B1%20%D8%B3%D9%8A%D8%AE%D9%88." target="_blank" rel="noopener" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:99999;background:#25D366;color:#fff;padding:14px 20px;border-radius:30px;font:700 16px Cairo,sans-serif;text-decoration:none;box-shadow:0 4px 14px #0004;white-space:nowrap;">🟢 اطلب عبر واتساب</a>
 </body></html>
